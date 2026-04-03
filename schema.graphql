@@ -1,0 +1,137 @@
+schema {
+  query: Query
+  mutation: Mutations
+}
+
+type Query {
+  users: [UserModel]
+  user(id: ID): UserType
+  addresses: [AddressType]
+  address(id: ID): AddressType
+  patients: [PatientType]
+  patient(id: ID): PatientType
+  counselors: [CounselorType]
+  counselor(id: ID): CounselorType
+  diagnostics: [DiagnosticType]
+  diagnostic(id: ID): DiagnosticType
+  prescriptions: [PrescriptionType]
+  prescription(id: ID): PrescriptionType
+  assignments: [AssignmentType]
+  assignment(id: ID): AssignmentType
+}
+
+type UserModel {
+  id: ID
+  firstName: String
+  lastName: String
+  email: String
+  contactNo: String
+  role: String
+}
+
+type UserType {
+  id: ID!
+  firstName: String!
+  lastName: String!
+  contactNo: String!
+  email: String!
+  role: String!
+  createdAt: DateTime
+}
+
+"""
+The `DateTime` scalar type represents a DateTime
+value as specified by
+[iso8601](https://en.wikipedia.org/wiki/ISO_8601).
+"""
+scalar DateTime
+
+type AddressType {
+  id: ID!
+  user: UserType!
+  country: String!
+  province: String!
+  city: String!
+  firstLineAddress: String!
+  secondLineAddress: String!
+  zipCode: String!
+}
+
+type PatientType {
+  id: ID!
+  user: UserType!
+  emergencyContactPerson: String!
+  emergencyContactNo: String!
+  medicalHistory: String!
+  currentMedication: String!
+  gender: String!
+  maritalStatus: String!
+  dateOfBirth: Date!
+}
+
+"""
+The `Date` scalar type represents a Date
+value as specified by
+[iso8601](https://en.wikipedia.org/wiki/ISO_8601).
+"""
+scalar Date
+
+type CounselorType {
+  id: ID!
+  user: UserType!
+  specialization: String!
+  licenseNo: String!
+}
+
+type DiagnosticType {
+  id: ID!
+  counselor: CounselorType!
+  patient: PatientType!
+  description: String!
+  createdAt: DateTime
+}
+
+type PrescriptionType {
+  id: ID!
+  counselor: CounselorType!
+  patient: PatientType!
+  prescribedMedicine: String!
+  createdAt: DateTime
+}
+
+type AssignmentType {
+  id: ID!
+  counselor: CounselorType!
+  patient: PatientType!
+  task: String!
+  status: String!
+  createdAt: DateTime
+}
+
+type Mutations {
+  createUser(createUser: CreateUserInput!): CreateUser
+  userLogin(loginUser: LoginUserInput!): LoginUser
+}
+
+type CreateUser {
+  user: UserModel
+}
+
+input CreateUserInput {
+  firstName: String!
+  lastName: String!
+  password: String!
+  email: String!
+  contactNo: String!
+  role: String
+}
+
+type LoginUser {
+  user: UserModel
+  token: String
+}
+
+input LoginUserInput {
+  email: String!
+  password: String!
+}

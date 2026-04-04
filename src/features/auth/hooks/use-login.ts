@@ -16,6 +16,10 @@ type LoginResponse = {
   userLogin: {
     token: string | null;
     user: {
+      id: string | null;
+      firstName: string | null;
+      lastName: string | null;
+      email: string | null;
       role: string | null;
     } | null;
   } | null;
@@ -54,7 +58,8 @@ export function useLogin() {
       },
     });
 
-    const role = response.data?.userLogin?.user?.role;
+    const user = response.data?.userLogin?.user;
+    const role = user?.role;
     const token = response.data?.userLogin?.token;
 
     if (token) {
@@ -64,6 +69,13 @@ export function useLogin() {
 
     if (role) {
       localStorage.setItem("user_role", role);
+    }
+
+    const firstName = user?.firstName?.trim();
+    if (firstName) {
+      localStorage.setItem("user_first_name", firstName);
+    } else {
+      localStorage.removeItem("user_first_name");
     }
 
     router.push(resolveRedirectPath(role));

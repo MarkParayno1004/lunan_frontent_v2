@@ -10,6 +10,12 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Modern Clinical Palette */
+  --color-primary-mint: #00C9A7;
+  --color-trust-navy: #2C3E50;
+  --color-soft-sage: #F0F4F2;
+  --color-clinical-sage: #E2E8E5;
 }
 
 @media (prefers-color-scheme: dark) {

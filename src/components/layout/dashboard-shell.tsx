@@ -2,13 +2,41 @@
 
 import { DashboardSidebar } from "@/components/layout/dashboard-sidebar";
 import { useCurrentRole } from "@/features/auth/hooks/use-current-role";
+import { FloatingChatWidget, Counselor } from "@/components/shared";
 
 type DashboardShellProps = Readonly<{
   children: React.ReactNode;
 }>;
 
+const MOCK_COUNSELORS: Counselor[] = [
+  {
+    id: "c1",
+    name: "Dr. Sarah Wilson",
+    specialty: "Cognitive Behavioral Therapy",
+    status: "Online",
+    avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
+  },
+  {
+    id: "c2",
+    name: "Dr. Michael Chen",
+    specialty: "Family Counseling",
+    status: "Away",
+    avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Michael",
+  },
+  {
+    id: "c3",
+    name: "Dr. Elena Rodriguez",
+    specialty: "Trauma Specialist",
+    status: "Online",
+    avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Elena",
+  },
+];
+
 export function DashboardShell({ children }: DashboardShellProps) {
   const role = useCurrentRole();
+
+  // Map user roles to chat widget requirements
+  const chatRole = role === "PATIENT" ? "patient" : role === "COUNSELOR" ? "doctor" : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-100 via-white to-zinc-100 p-4 sm:p-6">
@@ -18,6 +46,21 @@ export function DashboardShell({ children }: DashboardShellProps) {
           {children}
         </div>
       </div>
+
+      {chatRole && (
+        <FloatingChatWidget
+          role={chatRole}
+          counselors={MOCK_COUNSELORS}
+          initialMessages={[
+            {
+              id: "1",
+              text: "Hello! How can I help you today?",
+              sender: "them",
+              timestamp: "10:00 AM",
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

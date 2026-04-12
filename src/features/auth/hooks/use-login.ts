@@ -60,6 +60,8 @@ export function useLogin() {
 
     const user = response.data?.userLogin?.user;
     const role = user?.role;
+    const userEmail = user?.email;
+    const userId = user?.id;
     const token = response.data?.userLogin?.token;
 
     if (token) {
@@ -69,6 +71,14 @@ export function useLogin() {
 
     if (role) {
       localStorage.setItem("user_role", role);
+    }
+
+    if (userEmail) {
+      localStorage.setItem("user_email", userEmail);
+    }
+
+    if (userId) {
+      localStorage.setItem("user_id", userId);
     }
 
     const firstName = user?.firstName?.trim();

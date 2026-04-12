@@ -20,13 +20,15 @@ function makeClient() {
     credentials: "include",
   });
 
-  const csrfLink = setContext(async (_, context) => {
+  const authLink = setContext(async (_, context) => {
     const csrfToken = await getCsrfToken();
+    const authToken = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
     return {
       headers: {
         ...context.headers,
         ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
       fetchOptions: {
         ...(context.fetchOptions ?? {}),
@@ -38,7 +40,7 @@ function makeClient() {
   return new ApolloClient({
     cache: new InMemoryCache(),
     link: ApolloLink.from([
-      csrfLink,
+      authLink,
       new SSRMultipartLink({
         stripDefer: true,
         cutoffDelay: 100,

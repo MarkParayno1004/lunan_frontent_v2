@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 import { MessageCircle, X, Send, Paperclip, Minimize2, ChevronLeft, Search } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { TwilioChatService } from "@/lib/twilio-chat-service";
+import { Conversation, Message as TwilioMessage } from "@twilio/conversations";
 
 export interface Message {
   id: string;
@@ -17,6 +19,8 @@ export interface Counselor {
   specialty: string;
   avatarUrl?: string;
   status: "Online" | "Away";
+  userEmail?: string;
+  userId?: string;
 }
 
 interface FloatingChatWidgetProps {
@@ -41,8 +45,11 @@ export function FloatingChatWidget({
   const [selectedCounselor, setSelectedCounselor] = useState<Counselor | null>(null);
   const [messageText, setMessageText] = useState("");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatService = TwilioChatService.getInstance();
 
   const isPatient = role === "patient";
   const themeColor = isPatient ? "bg-blue-600" : "bg-emerald-600";
@@ -70,29 +77,86 @@ export function FloatingChatWidget({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const handleSend = () => {
-    if (!messageText.trim() || !selectedCounselor) return;
-
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text: messageText,
-      sender: "me",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setMessages([...messages, newMessage]);
-    onSendMessage?.(messageText, selectedCounselor.id);
-    setMessageText("");
+  const fetchTwilioToken = async () => {
+    const token = localStorage.getItem("auth_token");
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const response = await fetch(`${apiUrl}/twilio-token/`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error("Failed to fetch Twilio token");
+    return await response.json();
   };
 
-  const handleSelectCounselor = (c: Counselor) => {
+  const handleSend = async () => {
+    if (!messageText.trim() || !activeConversation) return;
+
+    try {
+      await chatService.sendMessage(activeConversation, messageText);
+      setMessageText("");
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    }
+  };
+
+  const handleSelectCounselor = async (c: Counselor) => {
     setSelectedCounselor(c);
     setView("chat");
+    setIsLoading(true);
+
+    try {
+      const { token, identity } = await fetchTwilioToken();
+      await chatService.initialize(token, identity);
+
+      const currentUserId = localStorage.getItem("user_id");
+      const targetUserId = c.userId || c.id;
+      
+      // Ensure unique name is consistent regardless of who starts the chat
+      const participants = [currentUserId, targetUserId].sort();
+      const uniqueName = `chat_${participants[0]}_${participants[1]}`;
+      const friendlyName = `Chat between Patient and Counselor`;
+
+      const conversation = await chatService.getOrCreateConversation(uniqueName, friendlyName);
+      
+      // Try to add the counselor to the conversation if they are not there
+      if (c.userEmail) {
+        await chatService.addParticipant(conversation, c.userEmail);
+      }
+
+      setActiveConversation(conversation);
+      
+      const twilioMessages = await chatService.getMessages(conversation);
+      setMessages(twilioMessages.map(m => ({
+        id: m.sid,
+        text: m.body || "",
+        sender: m.author === identity ? "me" : "them",
+        timestamp: m.dateCreated ? m.dateCreated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""
+      })));
+
+      chatService.onMessageAdded(conversation, (m) => {
+        setMessages((prev) => {
+          if (prev.find(msg => msg.id === m.sid)) return prev;
+          return [...prev, {
+            id: m.sid,
+            text: m.body || "",
+            sender: m.author === identity ? "me" : "them",
+            timestamp: m.dateCreated ? m.dateCreated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""
+          }];
+        });
+      });
+
+    } catch (error) {
+      console.error("Failed to setup chat:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleBack = () => {
     setView("list");
     setSelectedCounselor(null);
+    setActiveConversation(null);
   };
 
   return (
@@ -200,65 +264,73 @@ export function FloatingChatWidget({
               view === "chat" ? "translate-x-0" : "translate-x-full"
             )}
           >
-            <div 
-              ref={scrollRef}
-              className="flex-1 overflow-y-auto p-4 space-y-4"
-            >
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={cn(
-                    "flex flex-col max-w-[80%]",
-                    msg.sender === "me" ? "ml-auto items-end" : "items-start"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "rounded-2xl px-4 py-2 text-sm shadow-sm",
-                      msg.sender === "me" 
-                        ? cn("rounded-tr-none text-white", themeColor) 
-                        : "rounded-tl-none bg-white text-zinc-900 border border-zinc-100"
-                    )}
-                  >
-                    {msg.text}
-                  </div>
-                  <span className="mt-1 text-[10px] text-zinc-400 font-medium">
-                    {msg.timestamp}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Footer */}
-            <div className="border-t bg-white p-4">
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={onFileAttach}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600"
-                >
-                  <Paperclip className="h-5 w-5" />
-                </button>
-                <input
-                  type="text"
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  placeholder="Type your message..."
-                  className="w-full flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-100"
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!messageText.trim()}
-                  className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-xl text-white transition-all shadow-sm disabled:opacity-50",
-                    themeColor,
-                    themeHover
-                  )}
-                >
-                  <Send className="h-4 w-4" />
-                </button>
+            {isLoading ? (
+              <div className="flex-1 flex items-center justify-center text-sm text-zinc-500">
+                Connecting to secure chat...
               </div>
-            </div>
+            ) : (
+              <>
+                <div 
+                  ref={scrollRef}
+                  className="flex-1 overflow-y-auto p-4 space-y-4"
+                >
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        "flex flex-col max-w-[80%]",
+                        msg.sender === "me" ? "ml-auto items-end" : "items-start"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "rounded-2xl px-4 py-2 text-sm shadow-sm",
+                          msg.sender === "me" 
+                            ? cn("rounded-tr-none text-white", themeColor) 
+                            : "rounded-tl-none bg-white text-zinc-900 border border-zinc-100"
+                        )}
+                      >
+                        {msg.text}
+                      </div>
+                      <span className="mt-1 text-[10px] text-zinc-400 font-medium">
+                        {msg.timestamp}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer */}
+                <div className="border-t bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={onFileAttach}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600"
+                    >
+                      <Paperclip className="h-5 w-5" />
+                    </button>
+                    <input
+                      type="text"
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                      placeholder="Type your message..."
+                      className="w-full flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-100"
+                    />
+                    <button
+                      onClick={handleSend}
+                      disabled={!messageText.trim()}
+                      className={cn(
+                        "flex h-9 w-9 items-center justify-center rounded-xl text-white transition-all shadow-sm disabled:opacity-50",
+                        themeColor,
+                        themeHover
+                      )}
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
